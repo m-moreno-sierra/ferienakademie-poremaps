@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-Read spheres.json and write BOTH:
+Read data.json and write BOTH:
   - geometry.raw  (voxel grid for POREMAPS: uint8, Fortran memory order)
   - input.inp     (POREMAPS input file)
 
 Both files are regenerated every run — do not edit them by hand; edit this
 script and rerun.
 
-JSON schema (see spheres.json for an example):
+JSON schema (see data.json for an example):
 {
+  "scale": s,        # optional, defaults to SPHERE_COORD_SCALE
   "spheres": [
     {"center": [cx, cy, cz], "radius": r},
     ...
   ]
 }
-All values in meters. Any extra top-level keys (e.g. "notes") are ignored.
+Every center + radius is multiplied by scale to get meters. Any extra
+top-level keys (e.g. "notes") are ignored.
 """
 
 import json

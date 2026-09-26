@@ -6,8 +6,8 @@ A minimal end-to-end example: define a few spheres in a text file, voxelize them
 
 | File | Purpose |
 |---|---|
-| `spheres.json` | Sphere data as JSON. Schema: `{"scale": s, "spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`. Every center + radius is multiplied by `scale` to get meters — set `scale = 1.0` if your data is already in meters, or `scale = NX * VOXEL_SIZE` if your data is in a unit cube `[0, 1]`. Missing `scale` defaults to `1.0`. Extra top-level keys (like `"notes"`) are ignored. |
-| `build_geometry.py` | Reads `spheres.json`, voxelizes it, writes `geometry.raw` **and** `input.inp` in one shot. All grid/solver constants live at the top of this script — single source of truth. |
+| `data.json` | Sphere data as JSON. Schema: `{"scale": s, "spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`. Every center + radius is multiplied by `scale` to get meters — set `scale = 1.0` if your data is already in meters. Missing `scale` defaults to `SPHERE_COORD_SCALE = NX * VOXEL_SIZE` (unit-normalized in x/y). The shipped `data.json` has no `scale`: x/y span `[0, 1]`, z spans `[0, 54/28]`, i.e. a 28 x 28 x 54 mm column. Extra top-level keys (like `"notes"`) are ignored. |
+| `build_geometry.py` | Reads `data.json`, voxelizes it, writes `geometry.raw` **and** `input.inp` in one shot. All grid/solver constants live at the top of this script — single source of truth. |
 | `build_stl.py` | Optional. Reads `data.json` and writes `geometry.stl` for 3D printing: marching cubes on the exact signed distance field, in mm, clipped to the 28 x 28 x 54 mm box, not mirrored. Box size and resolution (0.2 mm) are hard-coded at the top. Needs `pyvista` + `scipy`. |
 | `fields2vtu.py` | Reads POREMAPS's output `.raw` fields (velocity, pressure, geometry, etc.) and writes a single `.vtu` for ParaView. Copied verbatim from upstream POREMAPS (MIT license, David Krach & Matthias Ruf). |
 
@@ -28,7 +28,7 @@ Files generated at runtime (not tracked in git):
 ## How it works
 
 ```
-spheres.json
+data.json
      │
      ▼
 build_geometry.py  ──►  geometry.raw  +  input.inp
@@ -42,7 +42,7 @@ build_stl.py       ──►  geometry.stl  (optional, for 3D printing)
                                                                       fields2vtu.py  ──►  fields_geometry.vtu  (ParaView)
 ```
 
-1. **Describe the geometry** in `spheres.json` — a list of sphere centers and radii (all in meters).
+1. **Describe the geometry** in `data.json` — a list of sphere centers and radii (unit-normalized, scaled to meters by `scale`).
 2. **Run `python build_geometry.py`.** This does two things in one shot:
    - voxelizes the spheres into `geometry.raw` (uint8 voxels, Fortran memory order — POREMAPS's format).
    - writes `input.inp` with the matching grid size, voxel size, and the actual porosity computed as `fluid_voxels / total_voxels`.
@@ -113,7 +113,7 @@ Do not edit `input.inp` by hand: `build_geometry.py` will overwrite it on the ne
 
 ## Coordinate convention
 
-Corner origin. The domain spans `[0, NX*vs] x [0, NY*vs] x [0, NZ*vs]`. Voxel `(i, j, k)` has its center at `((i+0.5)*vs, (j+0.5)*vs, (k+0.5)*vs)`. Sphere coordinates in `spheres.json` use the same convention.
+Corner origin. The domain spans `[0, NX*vs] x [0, NY*vs] x [0, NZ*vs]`. Voxel `(i, j, k)` has its center at `((i+0.5)*vs, (j+0.5)*vs, (k+0.5)*vs)`. Sphere coordinates in `data.json` (after scaling) use the same convention.
 
 ## The mirror-z trick
 
@@ -173,6 +173,6 @@ python fields2vtu.py geometry.raw 30 30 100 1e-5
 
 ## Modifying the example
 
-- **Different sphere pack**: edit `spheres.json`. No other changes needed.
+- **Different sphere pack**: edit `data.json`. If the domain size changes, also update `NX, NY, NZ` in `build_geometry.py` and the box size in `build_stl.py`.
 - **Higher/lower resolution**: change `NX, NY, NZ` and `VOXEL_SIZE` in `build_geometry.py`, and update `size_x_y_z` + `voxel_size` in `input.inp` to match.
 - **Different geometry (non-spheres)**: modify `voxelize()` in `build_geometry.py` to mark solid voxels however you want — the write path and mirror logic stay the same.
