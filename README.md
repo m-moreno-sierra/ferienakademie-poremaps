@@ -102,6 +102,38 @@ Default is `0`. Use `4` for a realistic finite sample with rigid walls.
 
 `permeability_spheres.log` — one row per `it_write` iterations. The last row's `wk33` column is the permeability in m² along the pressure gradient direction (z). `wk13`, `wk23` are the off-diagonal components; rotate the geometry and re-run to get the other rows of the full permeability tensor.
 
+## Visualizing the results (`fields2vtu.py`)
+
+Combines POREMAPS's `.raw` output files into a single `.vtu` you can open in ParaView.
+
+**Usage** — 5 positional arguments:
+```
+python fields2vtu.py <geometry_file> <NX> <NY> <NZ> <VOXEL_SIZE>
+```
+
+For this example (mirror-doubled to 30×30×100 at 10 µm voxels):
+```bash
+python fields2vtu.py geometry.raw 30 30 100 1e-5
+```
+
+**When and where to run it:** after POREMAPS finishes, from the folder that contains `geometry.raw` and POREMAPS's output files. The script looks for them in the current working directory.
+
+**What it reads:**
+- `geometry.raw` (required — errors out if missing)
+- Any of these that are present (missing ones are skipped with a printed note):
+  - `press_geometry.raw`
+  - `velx_geometry.raw`, `vely_geometry.raw`, `velz_geometry.raw`
+  - `voxel_neighborhood_geometry.raw`
+  - `domain_decomp_geometry.raw`
+
+**What it writes:** `fields_geometry.vtu` in the same folder.
+
+**In ParaView:** File → Open → pick the `.vtu` → click **Apply** → change **Representation** to *Point Gaussian* → in **Coloring** pick e.g. `z_velocity [m/s]` → click the rainbow **Rescale to Data Range** icon.
+
+**Gotcha:** the `NZ` argument is the *effective* grid size on disk. With `MIRROR_Z = True` in `build_geometry.py`, that's `2*NZ` (e.g. `100`), not the original (`50`).
+
+**Dependency:** `pyevtk` (`pip install pyevtk`). Without it you get `ModuleNotFoundError: No module named 'pyevtk'`.
+
 ## Modifying the example
 
 - **Different sphere pack**: edit `spheres.txt`. No other changes needed.
