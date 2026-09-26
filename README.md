@@ -6,8 +6,8 @@ A minimal end-to-end example: define a few spheres in a text file, voxelize them
 
 | File | Purpose |
 |---|---|
-| `spheres.txt` | Sphere data. One line per sphere: `cx cy cz r` (all in meters). Comments start with `#`. |
-| `build_geometry.py` | Reads `spheres.txt`, voxelizes it, writes `geometry.raw` in the format POREMAPS expects (uint8, Fortran byte order). Optionally mirror-doubles along z. |
+| `spheres.json` | Sphere data as JSON: `{"spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`, all values in meters. Extra top-level keys (like `"notes"`) are ignored. |
+| `build_geometry.py` | Reads `spheres.json`, voxelizes it, writes `geometry.raw` in the format POREMAPS expects (uint8, Fortran byte order). Optionally mirror-doubles along z. |
 | `input.inp` | POREMAPS input file. Grid size and voxel size must match the constants in `build_geometry.py`. |
 | `fields2vtu.py` | Reads POREMAPS's output `.raw` fields (velocity, pressure, geometry, etc.) and writes a single `.vtu` for ParaView. Copied verbatim from upstream POREMAPS (MIT license, David Krach & Matthias Ruf). |
 
@@ -76,7 +76,7 @@ If `MIRROR_Z = True`, use `2*NZ` in `size_x_y_z`. The `fields2vtu.py` call in St
 
 ## Coordinate convention
 
-Corner origin. The domain spans `[0, NX*vs] x [0, NY*vs] x [0, NZ*vs]`. Voxel `(i, j, k)` has its center at `((i+0.5)*vs, (j+0.5)*vs, (k+0.5)*vs)`. Sphere coordinates in `spheres.txt` use the same convention.
+Corner origin. The domain spans `[0, NX*vs] x [0, NY*vs] x [0, NZ*vs]`. Voxel `(i, j, k)` has its center at `((i+0.5)*vs, (j+0.5)*vs, (k+0.5)*vs)`. Sphere coordinates in `spheres.json` use the same convention.
 
 ## The mirror-z trick
 
@@ -136,6 +136,6 @@ python fields2vtu.py geometry.raw 30 30 100 1e-5
 
 ## Modifying the example
 
-- **Different sphere pack**: edit `spheres.txt`. No other changes needed.
+- **Different sphere pack**: edit `spheres.json`. No other changes needed.
 - **Higher/lower resolution**: change `NX, NY, NZ` and `VOXEL_SIZE` in `build_geometry.py`, and update `size_x_y_z` + `voxel_size` in `input.inp` to match.
 - **Different geometry (non-spheres)**: modify `voxelize()` in `build_geometry.py` to mark solid voxels however you want — the write path and mirror logic stay the same.

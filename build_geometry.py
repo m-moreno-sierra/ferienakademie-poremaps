@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """
-Read spheres.txt (cx cy cz r per line, meters) and write geometry.raw
-in the format POREMAPS expects: uint8 voxels (0 = fluid, 1 = solid),
-Fortran memory order (x varies fastest).
+Read spheres.json and write geometry.raw in the format POREMAPS expects:
+uint8 voxels (0 = fluid, 1 = solid), Fortran memory order (x varies fastest).
+
+JSON schema (see spheres.json for an example):
+{
+  "spheres": [
+    {"center": [cx, cy, cz], "radius": r},
+    ...
+  ]
+}
+All values in meters. Any extra top-level keys (e.g. "notes") are ignored.
 
 Grid size and voxel size MUST match the .inp file.
 """
 
+import json
 import numpy as np
 from pathlib import Path
 
@@ -17,19 +26,13 @@ MIRROR_Z   = True           # double along z by reflecting, so face z=0 == face 
 # ----------------------------
 
 HERE = Path(__file__).resolve().parent
-SPHERES_FILE = HERE / "spheres.txt"
+SPHERES_FILE = HERE / "spheres.json"
 OUTPUT_FILE  = HERE / "geometry.raw"
 
 
 def load_spheres(path):
-    spheres = []
-    for line in path.read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        cx, cy, cz, r = (float(v) for v in line.split())
-        spheres.append((cx, cy, cz, r))
-    return spheres
+    data = json.loads(path.read_text())
+    return [(*s["center"], s["radius"]) for s in data["spheres"]]
 
 
 def voxelize(spheres, nx, ny, nz, vs):
