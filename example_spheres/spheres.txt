@@ -1,0 +1,13 @@
+# Sphere data for the POREMAPS example.
+# Format per line:  cx  cy  cz  r   (all in meters)
+# Lines starting with '#' are ignored.
+#
+# Coordinate convention: corner origin.
+# Domain spans [0, nx*vs] x [0, ny*vs] x [0, nz*vs].
+# For the default input.inp: 30 x 30 x 50 voxels, vs = 1e-5 m
+# So the domain is 300 um x 300 um x 500 um.
+
+# cx        cy        cz        r
+1.0e-4      1.5e-4    1.5e-4    7e-5
+2.0e-4      1.5e-4    2.5e-4    7e-5
+1.0e-4      1.5e-4    3.5e-4    7e-5
