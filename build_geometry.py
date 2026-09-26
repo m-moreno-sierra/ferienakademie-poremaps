@@ -27,6 +27,13 @@ VOXEL_SIZE = 4e-5              # meters
 MIRROR_Z   = True              # double along z by reflecting, so face z=0 == face z=Lz
 EXPORT_STL = True              # also write geometry.stl (needs: pip install scikit-image trimesh)
 
+# --- sphere coordinate scaling ---
+# Multiplies every sphere center + radius from the JSON (result: meters).
+# If the JSON has its own "scale" field, that overrides this constant.
+# Default: NX * VOXEL_SIZE assumes JSON is in a unit cube [0, 1] fitted to the x-domain.
+# Set to 1.0 if the JSON is already in meters.
+SPHERE_COORD_SCALE = NX * VOXEL_SIZE
+
 # --- POREMAPS solver settings (see README) ---
 BOUNDARY_METHOD    = 0                    # 0 = periodic all around
 MAX_ITER           = 100_000
@@ -40,7 +47,7 @@ WRITE_OUTPUT       = (1, 1, 0, 0)         # velocity, pressure, neighborhood, de
 LOG_FILE_NAME      = "permeability_spheres.log"
 
 HERE          = Path(__file__).resolve().parent
-SPHERES_FILE  = HERE / "spheres.json"
+SPHERES_FILE  = HERE / "data.json"
 GEOMETRY_FILE = HERE / "geometry.raw"
 INPUT_FILE    = HERE / "input.inp"
 STL_FILE      = HERE / "geometry.stl"
@@ -48,7 +55,7 @@ STL_FILE      = HERE / "geometry.stl"
 
 def load_spheres(path):
     data = json.loads(path.read_text())
-    scale = data.get("scale", 1.0)   # multiplier applied to all centers + radii (meters). 1.0 = already in meters.
+    scale = data.get("scale", SPHERE_COORD_SCALE)   # JSON overrides script default
     return [(*(c * scale for c in s["center"]), s["radius"] * scale) for s in data["spheres"]]
 
 
