@@ -11,3 +11,4 @@ domain_decomp_*.raw
 *.stl
 __pycache__/
 .DS_Store
+generate_packing.py
