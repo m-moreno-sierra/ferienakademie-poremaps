@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Read data.json and write BOTH:
+Read data.json, clip the packing to a cylindrical bore (everything outside is
+solid), and write BOTH:
   - geometry.raw  (voxel grid for POREMAPS: uint8, Fortran memory order)
   - input.inp     (POREMAPS input file)
 
@@ -27,6 +28,12 @@ from pathlib import Path
 NX, NY, NZ = 70, 70, 135
 VOXEL_SIZE = 4e-4              # meters
 MIRROR_Z   = True              # double along z by reflecting, so face z=0 == face z=Lz
+
+# --- cylindrical sample (axis along z, centered in the x/y domain) ---
+# The packing fills the bore; the printed wall (r = 11 .. 14.5 mm) lies outside
+# it, so every voxel outside the bore is simply solid.
+CYL_CENTER  = (NX * VOXEL_SIZE / 2, NY * VOXEL_SIZE / 2)   # meters, (14 mm, 14 mm)
+BORE_RADIUS = 11e-3            # meters, 22 mm inner diameter
 
 # --- sphere coordinate scaling ---
 # Multiplies every sphere center + radius from the JSON (result: meters).
@@ -72,6 +79,13 @@ def voxelize(spheres, nx, ny, nz, vs):
     return geom
 
 
+def bore_mask(nx, ny, vs):
+    """2D mask (nx, ny): True where the voxel center lies inside the bore."""
+    i, j = np.meshgrid(np.arange(nx), np.arange(ny), indexing="ij")
+    cx, cy = CYL_CENTER
+    return ((i + 0.5) * vs - cx) ** 2 + ((j + 0.5) * vs - cy) ** 2 <= BORE_RADIUS ** 2
+
+
 def write_input_file(nx, ny, nz, vs, porosity):
     dd = " ".join(str(x) for x in DOM_DECOMPOSITION)
     di = " ".join(str(x) for x in DOM_INTEREST)
@@ -99,6 +113,8 @@ def main():
     print(f"Loaded {len(spheres)} spheres from {SPHERES_FILE.name}")
 
     geom = voxelize(spheres, NX, NY, NZ, VOXEL_SIZE)
+    mask = bore_mask(NX, NY, VOXEL_SIZE)
+    geom[~mask] = 1                 # everything outside the bore is solid
 
     if MIRROR_Z:
         geom = np.concatenate([geom, geom[:, :, ::-1]], axis=2)
@@ -110,14 +126,15 @@ def main():
     GEOMETRY_FILE.write_bytes(geom.tobytes(order="F"))
 
     total    = NX * NY * nz_out
-    solid    = int((geom == 1).sum())
-    fluid    = total - solid
-    porosity = fluid / total       # fluid_volume / total_volume
+    bore     = int(mask.sum()) * nz_out
+    fluid    = int((geom == 0).sum())   # fluid only exists inside the bore
+    porosity = fluid / bore             # fluid_volume / bore_volume
 
     print(f"Grid: {NX} x {NY} x {nz_out} = {total} voxels, vs = {VOXEL_SIZE} m")
-    print(f"Solid voxels: {solid}  ({solid/total:.1%})")
+    print(f"Solid voxels: {total - fluid}  ({(total - fluid)/total:.1%} of grid)")
+    print(f"Bore voxels:  {bore}  (d = {2 * BORE_RADIUS * 1e3:g} mm)")
     print(f"Fluid voxels: {fluid}")
-    print(f"Porosity:     {porosity:.6f}  (fluid_volume / total_volume)")
+    print(f"Porosity:     {porosity:.6f}  (fluid_volume / bore_volume)")
     print(f"Wrote {GEOMETRY_FILE.name} ({GEOMETRY_FILE.stat().st_size} bytes)")
 
     write_input_file(NX, NY, nz_out, VOXEL_SIZE, porosity)

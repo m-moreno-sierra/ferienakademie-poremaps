@@ -1,5 +1,5 @@
 {
-  "notes": "Unit-normalized: x/y in [0, 1], z in [0, 54/28]. No scale field, so build_geometry.py multiplies by NX * VOXEL_SIZE (28 mm) to get meters. Corner-origin convention; the domain spans [0, NX*vs] x [0, NY*vs] x [0, NZ*vs]. See README.md for grid/domain layout.",
+  "notes": "Unit-normalized: x/y in [0, 1], z in [0, 54/28]. No scale field, so build_geometry.py multiplies by NX * VOXEL_SIZE (28 mm) to get meters. Only the part inside the 22 mm bore centered at (14, 14) mm is used. Corner-origin convention; the domain spans [0, NX*vs] x [0, NY*vs] x [0, NZ*vs]. See README.md for grid/domain layout.",
   "spheres": [
     {"center": [0.8055440755652291, 0.8194923876543481, 1.7102279843304604], "radius": 0.17580968969545924},
     {"center": [0.17632418869855077, 0.5433045017544695, 1.752247239872878], "radius": 0.17632418869855077},

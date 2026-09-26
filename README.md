@@ -6,9 +6,9 @@ A minimal end-to-end example: define a few spheres in a text file, voxelize them
 
 | File | Purpose |
 |---|---|
-| `data.json` | Sphere data as JSON. Schema: `{"scale": s, "spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`. Every center + radius is multiplied by `scale` to get meters — set `scale = 1.0` if your data is already in meters. Missing `scale` defaults to `SPHERE_COORD_SCALE = NX * VOXEL_SIZE` (unit-normalized in x/y). The shipped `data.json` has no `scale`: x/y span `[0, 1]`, z spans `[0, 54/28]`, i.e. a 28 x 28 x 54 mm column. Extra top-level keys (like `"notes"`) are ignored. |
+| `data.json` | Sphere data as JSON. Schema: `{"scale": s, "spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`. Every center + radius is multiplied by `scale` to get meters — set `scale = 1.0` if your data is already in meters. Missing `scale` defaults to `SPHERE_COORD_SCALE = NX * VOXEL_SIZE` (unit-normalized in x/y). The shipped `data.json` has no `scale`: x/y span `[0, 1]`, z spans `[0, 54/28]`, i.e. a 28 x 28 x 54 mm column. Only the part inside the 22 mm bore (see below) is used. Extra top-level keys (like `"notes"`) are ignored. |
 | `build_geometry.py` | Reads `data.json`, voxelizes it, writes `geometry.raw` **and** `input.inp` in one shot. All grid/solver constants live at the top of this script — single source of truth. |
-| `build_stl.py` | Optional. Reads `data.json` and writes `geometry.stl` for 3D printing: marching cubes on the exact signed distance field, in mm, clipped to the 28 x 28 x 54 mm box, not mirrored. Box size and resolution (0.2 mm) are hard-coded at the top. Needs `pyvista` + `scipy`. |
+| `build_stl.py` | Optional. Reads `data.json` and writes `geometry.stl` for 3D printing: marching cubes on the exact signed distance field, in mm: the packing clipped to the 22 mm bore plus a 3.5 mm solid wall (29 mm outer diameter), 54 mm tall, not mirrored. Cylinder dimensions and resolution (0.2 mm) are hard-coded at the top. Needs `pyvista` + `scipy`. |
 | `fields2vtu.py` | Reads POREMAPS's output `.raw` fields (velocity, pressure, geometry, etc.) and writes a single `.vtu` for ParaView. Copied verbatim from upstream POREMAPS (MIT license, David Krach & Matthias Ruf). |
 
 Files generated at runtime (not tracked in git):
@@ -16,7 +16,7 @@ Files generated at runtime (not tracked in git):
 | File | Produced by |
 |---|---|
 | `geometry.raw` | `build_geometry.py` |
-| `input.inp` | `build_geometry.py` — POREMAPS input file, regenerated each run from constants in the script (also contains the computed porosity = fluid_voxels / total_voxels) |
+| `input.inp` | `build_geometry.py` — POREMAPS input file, regenerated each run from constants in the script (also contains the computed porosity = fluid_voxels / bore_voxels) |
 | `geometry.stl` | `build_stl.py` — printable part in mm (unmirrored) |
 | `permeability_spheres.log` | POREMAPS — convergence history + permeability values |
 | `velx_geometry.raw`, `vely_geometry.raw`, `velz_geometry.raw` | POREMAPS — velocity components (float64), when `write_output` flag 1 is set |
@@ -45,7 +45,7 @@ build_stl.py       ──►  geometry.stl  (optional, for 3D printing)
 1. **Describe the geometry** in `data.json` — a list of sphere centers and radii (unit-normalized, scaled to meters by `scale`).
 2. **Run `python build_geometry.py`.** This does two things in one shot:
    - voxelizes the spheres into `geometry.raw` (uint8 voxels, Fortran memory order — POREMAPS's format).
-   - writes `input.inp` with the matching grid size, voxel size, and the actual porosity computed as `fluid_voxels / total_voxels`.
+   - writes `input.inp` with the matching grid size, voxel size, and the actual porosity computed as `fluid_voxels / bore_voxels`.
 
    All grid + solver knobs (`NX`, `NY`, `NZ`, `VOXEL_SIZE`, `MIRROR_Z`, `BOUNDARY_METHOD`, `MAX_ITER`, `EPS`, `WRITE_OUTPUT`, …) live at the top of `build_geometry.py`. **This is the single source of truth.** `input.inp` is regenerated every run and should not be edited by hand.
 
@@ -111,6 +111,15 @@ WRITE_OUTPUT       = (1, 1, 0, 0)         # velocity, pressure, neighborhood, de
 
 Do not edit `input.inp` by hand: `build_geometry.py` will overwrite it on the next run. The `fields2vtu.py` call in Step 3 needs the **effective** nz (`2*NZ` if `MIRROR_Z = True`).
 
+## Cylindrical sample
+
+The printed part is a cylinder with its axis along z, centered at `(14, 14)` mm (the center of the packing):
+
+- **Bore**, 22 mm diameter (`BORE_RADIUS = 11e-3` m): filled with the sphere packing, and spheres are cut off at its edge.
+- **Wall**, from 22 mm to 29 mm diameter (3.5 mm thick): solid.
+
+In `build_geometry.py`, every voxel outside the bore is set to solid, so the wall does not need its own voxels, and the 70 x 70 grid (28 mm) only has to contain the bore. Porosity is `fluid_voxels / bore_voxels`, i.e. it is measured over the bore only. `build_stl.py` builds the full part (bore + wall) with nothing outside the 29 mm cylinder, and reports the bore porosity as `1 - (V_solid - V_wall) / V_bore`.
+
 ## Coordinate convention
 
 Corner origin. The domain spans `[0, NX*vs] x [0, NY*vs] x [0, NZ*vs]`. Voxel `(i, j, k)` has its center at `((i+0.5)*vs, (j+0.5)*vs, (k+0.5)*vs)`. Sphere coordinates in `data.json` (after scaling) use the same convention.
@@ -173,6 +182,6 @@ python fields2vtu.py geometry.raw 30 30 100 1e-5
 
 ## Modifying the example
 
-- **Different sphere pack**: edit `data.json`. If the domain size changes, also update `NX, NY, NZ` in `build_geometry.py` and the box size in `build_stl.py`.
+- **Different sphere pack**: edit `data.json`. If the domain size changes, also update `NX, NY, NZ` in `build_geometry.py` and the cylinder size in `build_stl.py`.
 - **Higher/lower resolution**: change `NX, NY, NZ` and `VOXEL_SIZE` in `build_geometry.py`, and update `size_x_y_z` + `voxel_size` in `input.inp` to match.
 - **Different geometry (non-spheres)**: modify `voxelize()` in `build_geometry.py` to mark solid voxels however you want — the write path and mirror logic stay the same.

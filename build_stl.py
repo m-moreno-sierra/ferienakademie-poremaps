@@ -2,8 +2,12 @@
 """
 Read data.json and write geometry.stl (in mm) for 3D printing.
 
-Marching cubes on the exact signed distance field of the spheres, clipped to
-the 28 x 28 x 54 mm box. Not mirrored.
+Cylindrical sample, axis along z, 54 mm tall, not mirrored:
+  - bore of 22 mm diameter filled with the sphere packing (spheres clipped to it)
+  - solid wall from 22 mm to 29 mm diameter (3.5 mm thick)
+Nothing outside the 29 mm cylinder ends up in the STL.
+
+Marching cubes on the exact signed distance field of spheres + wall.
 """
 
 import json
@@ -14,9 +18,11 @@ from scipy import ndimage
 
 SPHERES_FILE = "data.json"
 SCALE = 28.0                    # mm, data.json is a unit cube in x/y
-LX, LY, LZ = 28.0, 28.0, 54.0   # mm, box size
+CX, CY = SCALE / 2, SCALE / 2   # mm, cylinder axis (center of the packing)
+R_IN, R_OUT = 11.0, 14.5        # mm, bore radius / outer radius (22 / 29 mm diameter)
+LZ = 54.0                       # mm, height
 H = 0.2                         # mm, marching-cubes grid spacing
-PAD = 2                         # grid points outside the box on each side
+PAD = 2                         # grid points outside the part on each side
 STL_FILE = "geometry.stl"
 
 # --- load spheres (mm) ---
@@ -26,8 +32,9 @@ radii = np.array([s["radius"] for s in data["spheres"]]) * SCALE
 print(f"Loaded {len(radii)} spheres from {SPHERES_FILE}")
 
 # --- signed distance field (negative inside the solid) ---
-x = (np.arange(math.ceil(LX / H) + 2 * PAD + 1) - PAD) * H
-y = (np.arange(math.ceil(LY / H) + 2 * PAD + 1) - PAD) * H
+n_xy = math.ceil(2 * R_OUT / H) + 2 * PAD + 1
+x = CX - R_OUT + (np.arange(n_xy) - PAD) * H
+y = CY - R_OUT + (np.arange(n_xy) - PAD) * H
 z = (np.arange(math.ceil(LZ / H) + 2 * PAD + 1) - PAD) * H
 f = np.full((len(x), len(y), len(z)), 1e3, dtype=np.float32)
 
@@ -45,9 +52,10 @@ for (cx, cy, cz), r in zip(centers, radii):
     block = f[i0:i1, j0:j1, k0:k1]
     np.minimum(block, dist, out=block)
 
-# clip to the box
-f = np.maximum(f, np.maximum(-x, x - LX)[:, None, None])
-f = np.maximum(f, np.maximum(-y, y - LY)[None, :, None])
+# add the wall, then clip to the outer cylinder and to [0, LZ]
+r_xy = np.hypot(x[:, None] - CX, y[None, :] - CY)[:, :, None]
+f = np.minimum(f, np.maximum(R_IN - r_xy, r_xy - R_OUT))
+f = np.maximum(f, r_xy - R_OUT)
 f = np.maximum(f, np.maximum(-z, z - LZ)[None, None, :]).astype(np.float32)
 # grid points exactly on the surface give non-manifold marching-cubes edges
 f[f == 0] = 1e-6
@@ -68,9 +76,11 @@ mesh.save(STL_FILE)
 
 # --- checks ---
 _, n_bodies = ndimage.label(f <= 0)
-porosity = 1 - abs(mesh.volume) / (LX * LY * LZ)
-print(f"Box:          {LX:g} x {LY:g} x {LZ:g} mm")
+v_bore = math.pi * R_IN**2 * LZ
+v_wall = math.pi * (R_OUT**2 - R_IN**2) * LZ
+porosity = 1 - (abs(mesh.volume) - v_wall) / v_bore     # of the bore only
+print(f"Cylinder:     d_in {2 * R_IN:g} mm, d_out {2 * R_OUT:g} mm, height {LZ:g} mm")
 print(f"Triangles:    {mesh.n_cells}, open edges {mesh.n_open_edges}")
 print(f"Solid bodies: {n_bodies}")
-print(f"Porosity:     {porosity:.6f}")
+print(f"Porosity:     {porosity:.6f}  (bore only)")
 print(f"Wrote {STL_FILE}")
