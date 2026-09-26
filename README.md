@@ -7,8 +7,7 @@ A minimal end-to-end example: define a few spheres in a text file, voxelize them
 | File | Purpose |
 |---|---|
 | `spheres.json` | Sphere data as JSON: `{"spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`, all values in meters. Extra top-level keys (like `"notes"`) are ignored. |
-| `build_geometry.py` | Reads `spheres.json`, voxelizes it, writes `geometry.raw` in the format POREMAPS expects (uint8, Fortran byte order). Optionally mirror-doubles along z. |
-| `input.inp` | POREMAPS input file. Grid size and voxel size must match the constants in `build_geometry.py`. |
+| `build_geometry.py` | Reads `spheres.json`, voxelizes it, writes `geometry.raw` **and** `input.inp` in one shot. All grid/solver constants live at the top of this script — single source of truth. |
 | `fields2vtu.py` | Reads POREMAPS's output `.raw` fields (velocity, pressure, geometry, etc.) and writes a single `.vtu` for ParaView. Copied verbatim from upstream POREMAPS (MIT license, David Krach & Matthias Ruf). |
 
 Files generated at runtime (not tracked in git):
@@ -16,6 +15,7 @@ Files generated at runtime (not tracked in git):
 | File | Produced by |
 |---|---|
 | `geometry.raw` | `build_geometry.py` |
+| `input.inp` | `build_geometry.py` — POREMAPS input file, regenerated each run from constants in the script (also contains the computed porosity = fluid_voxels / total_voxels) |
 | `permeability_spheres.log` | POREMAPS — convergence history + permeability values |
 | `velx_geometry.raw`, `vely_geometry.raw`, `velz_geometry.raw` | POREMAPS — velocity components (float64), when `write_output` flag 1 is set |
 | `press_geometry.raw` | POREMAPS — pressure (float64), when flag 2 is set |
@@ -57,22 +57,25 @@ Then open `fields_geometry.vtu` in ParaView.
 
 ## Configuration
 
-Grid resolution and physical scale live in two places that MUST match:
+All grid and POREMAPS solver settings live at the top of `build_geometry.py` — this is the **single source of truth**. Running the script regenerates both `geometry.raw` and `input.inp` consistently.
 
-**`build_geometry.py` (top of file):**
+**Geometry:**
 ```python
 NX, NY, NZ = 30, 30, 50
 VOXEL_SIZE = 1e-5           # meters
 MIRROR_Z   = True           # doubles nz along z via mirror reflection
 ```
 
-**`input.inp`:**
-```
-size_x_y_z  30 30 100        # NX, NY, NZ (or 2*NZ if MIRROR_Z is True)
-voxel_size  1e-05
+**POREMAPS solver:**
+```python
+BOUNDARY_METHOD    = 0                    # 0 = periodic all around (see table below)
+MAX_ITER           = 100_000
+EPS                = 1e-6
+WRITE_OUTPUT       = (1, 1, 0, 0)         # velocity, pressure, neighborhood, decomp
+# ... etc — see the file
 ```
 
-If `MIRROR_Z = True`, use `2*NZ` in `size_x_y_z`. The `fields2vtu.py` call in Step 3 also needs the *effective* nz (`100` here, not `50`).
+Do not edit `input.inp` by hand: `build_geometry.py` will overwrite it on the next run. The `fields2vtu.py` call in Step 3 needs the **effective** nz (`2*NZ` if `MIRROR_Z = True`).
 
 ## Coordinate convention
 

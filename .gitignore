@@ -1,0 +1,12 @@
+input.inp
+geometry.raw
+permeability_*.log
+fields_*.vtu
+velx_*.raw
+vely_*.raw
+velz_*.raw
+press_*.raw
+voxel_neighborhood_*.raw
+domain_decomp_*.raw
+__pycache__/
+.DS_Store

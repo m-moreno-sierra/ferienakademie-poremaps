@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Read spheres.json and write geometry.raw in the format POREMAPS expects:
-uint8 voxels (0 = fluid, 1 = solid), Fortran memory order (x varies fastest).
+Read spheres.json and write BOTH:
+  - geometry.raw  (voxel grid for POREMAPS: uint8, Fortran memory order)
+  - input.inp     (POREMAPS input file)
+
+Both files are regenerated every run — do not edit them by hand; edit this
+script and rerun.
 
 JSON schema (see spheres.json for an example):
 {
@@ -11,23 +15,33 @@ JSON schema (see spheres.json for an example):
   ]
 }
 All values in meters. Any extra top-level keys (e.g. "notes") are ignored.
-
-Grid size and voxel size MUST match the .inp file.
 """
 
 import json
 import numpy as np
 from pathlib import Path
 
-# --- must match input.inp ---
-NX, NY, NZ = 30, 30, 50
-VOXEL_SIZE = 1e-5           # meters
-MIRROR_Z   = True           # double along z by reflecting, so face z=0 == face z=Lz
-# ----------------------------
+# --- geometry grid ---
+NX, NY, NZ = 70, 70, 135
+VOXEL_SIZE = 4e-5              # meters
+MIRROR_Z   = True              # double along z by reflecting, so face z=0 == face z=Lz
 
-HERE = Path(__file__).resolve().parent
-SPHERES_FILE = HERE / "spheres.json"
-OUTPUT_FILE  = HERE / "geometry.raw"
+# --- POREMAPS solver settings (see README) ---
+BOUNDARY_METHOD    = 0                    # 0 = periodic all around
+MAX_ITER           = 100_000
+IT_EVAL            = 100
+IT_WRITE           = 100
+SOLVING_ALGORITHM  = 2
+EPS                = 1e-6
+DOM_DECOMPOSITION  = (0, 0, 0)            # 0 0 0 = let MPI decide
+DOM_INTEREST       = (0, 0, 0, 0, 0, 0)   # all zeros = whole domain
+WRITE_OUTPUT       = (1, 1, 0, 0)         # velocity, pressure, neighborhood, decomp
+LOG_FILE_NAME      = "permeability_spheres.log"
+
+HERE          = Path(__file__).resolve().parent
+SPHERES_FILE  = HERE / "spheres.json"
+GEOMETRY_FILE = HERE / "geometry.raw"
+INPUT_FILE    = HERE / "input.inp"
 
 
 def load_spheres(path):
@@ -48,6 +62,28 @@ def voxelize(spheres, nx, ny, nz, vs):
     return geom
 
 
+def write_input_file(nx, ny, nz, vs, porosity):
+    dd = " ".join(str(x) for x in DOM_DECOMPOSITION)
+    di = " ".join(str(x) for x in DOM_INTEREST)
+    wo = " ".join(str(x) for x in WRITE_OUTPUT)
+    INPUT_FILE.write_text(
+        f"dom_decomposition {dd}\n"
+        f"boundary_method {BOUNDARY_METHOD}\n"
+        f"geometry_file_name {GEOMETRY_FILE.name}\n"
+        f"size_x_y_z  {nx} {ny} {nz}\n"
+        f"voxel_size  {vs}\n"
+        f"max_iter    {MAX_ITER}\n"
+        f"it_eval    {IT_EVAL}\n"
+        f"it_write   {IT_WRITE}\n"
+        f"log_file_name {LOG_FILE_NAME}\n"
+        f"solving_algorithm {SOLVING_ALGORITHM}\n"
+        f"eps {EPS}\n"
+        f"porosity {porosity:.6f}\n"
+        f"dom_interest {di}\n"
+        f"write_output {wo}\n"
+    )
+
+
 def main():
     spheres = load_spheres(SPHERES_FILE)
     print(f"Loaded {len(spheres)} spheres from {SPHERES_FILE.name}")
@@ -61,17 +97,21 @@ def main():
     else:
         nz_out = NZ
 
-    # numpy's tofile() always writes C-order; use tobytes(order='F') for true Fortran order
-    OUTPUT_FILE.write_bytes(geom.tobytes(order='F'))
+    GEOMETRY_FILE.write_bytes(geom.tobytes(order="F"))
 
-    total = NX * NY * nz_out
-    solid = int((geom == 1).sum())
+    total    = NX * NY * nz_out
+    solid    = int((geom == 1).sum())
+    fluid    = total - solid
+    porosity = fluid / total       # fluid_volume / total_volume
+
     print(f"Grid: {NX} x {NY} x {nz_out} = {total} voxels, vs = {VOXEL_SIZE} m")
     print(f"Solid voxels: {solid}  ({solid/total:.1%})")
-    print(f"Porosity:     {(geom == 0).mean():.4f}")
-    print(f"Wrote {OUTPUT_FILE.name} ({OUTPUT_FILE.stat().st_size} bytes)")
-    if MIRROR_Z:
-        print(f"\nMake sure input.inp has:  size_x_y_z  {NX} {NY} {nz_out}")
+    print(f"Fluid voxels: {fluid}")
+    print(f"Porosity:     {porosity:.6f}  (fluid_volume / total_volume)")
+    print(f"Wrote {GEOMETRY_FILE.name} ({GEOMETRY_FILE.stat().st_size} bytes)")
+
+    write_input_file(NX, NY, nz_out, VOXEL_SIZE, porosity)
+    print(f"Wrote {INPUT_FILE.name}")
 
 
 if __name__ == "__main__":
