@@ -9,7 +9,6 @@ A minimal end-to-end example: define a few spheres in a text file, voxelize them
 | `spheres.txt` | Sphere data. One line per sphere: `cx cy cz r` (all in meters). Comments start with `#`. |
 | `build_geometry.py` | Reads `spheres.txt`, voxelizes it, writes `geometry.raw` in the format POREMAPS expects (uint8, Fortran byte order). Optionally mirror-doubles along z. |
 | `input.inp` | POREMAPS input file. Grid size and voxel size must match the constants in `build_geometry.py`. |
-| `porous_strucutre.py` | Alternative geometry generator using CadQuery. Creates a solid cylinder drilled with parallel channels at target porosities, exports each as `.stl`. Independent from the sphere-voxel pipeline (see section below). |
 | `fields2vtu.py` | Reads POREMAPS's output `.raw` fields (velocity, pressure, geometry, etc.) and writes a single `.vtu` for ParaView. Copied verbatim from upstream POREMAPS (MIT license, David Krach & Matthias Ruf). |
 
 Files generated at runtime (not tracked in git):
@@ -23,7 +22,6 @@ Files generated at runtime (not tracked in git):
 | `voxel_neighborhood_geometry.raw` | POREMAPS — voxel neighbor classification (uint32), when flag 3 is set |
 | `domain_decomp_geometry.raw` | POREMAPS — MPI rank ownership (uint32), when flag 4 is set |
 | `fields_geometry.vtu` | `fields2vtu.py` — combined VTU for ParaView |
-| `porous_cylinders/*.stl` | `porous_strucutre.py` — CAD porous cylinder geometries |
 
 ## Requirements
 
@@ -31,7 +29,6 @@ Files generated at runtime (not tracked in git):
 - **MPI runtime** with `mpirun` on `PATH` (OpenMPI, MPICH, or your cluster's vendor MPI).
 - **Python 3** with `numpy`.
 - Optional (for visualization): `pyevtk` (`pip install pyevtk`) and [ParaView](https://www.paraview.org/).
-- Optional (only for `porous_strucutre.py`): `cadquery` (`pip install cadquery`).
 
 ## Setup
 
@@ -104,22 +101,6 @@ Default is `0`. Use `4` for a realistic finite sample with rigid walls.
 ## Reading the output
 
 `permeability_spheres.log` — one row per `it_write` iterations. The last row's `wk33` column is the permeability in m² along the pressure gradient direction (z). `wk13`, `wk23` are the off-diagonal components; rotate the geometry and re-run to get the other rows of the full permeability tensor.
-
-## Alternative: CAD-based geometry (`porous_strucutre.py`)
-
-A standalone CadQuery script that generates a solid cylinder drilled with a grid of straight parallel channels, sized to hit given porosity targets, and exports each as an `.stl` file into `porous_cylinders/`.
-
-Run:
-```bash
-python porous_strucutre.py
-```
-
-Settings live at the top of the script:
-- `SAMPLE_DIAMETER`, `SAMPLE_HEIGHT` — cylinder dimensions in mm
-- `CHANNEL_SPACING` — grid spacing between adjacent channels in mm
-- `TARGET_POROSITIES` — list of target porosities, one STL per entry
-
-**Note:** the output is `.stl` (a triangulated surface mesh), not `.raw` (a voxel grid). To feed one of these geometries into POREMAPS, you'd need to voxelize the STL separately — that conversion step is not yet in this repo.
 
 ## Modifying the example
 
