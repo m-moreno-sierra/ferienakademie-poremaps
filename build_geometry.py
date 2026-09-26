@@ -23,9 +23,8 @@ from pathlib import Path
 
 # --- geometry grid ---
 NX, NY, NZ = 70, 70, 135
-VOXEL_SIZE = 4e-5              # meters
+VOXEL_SIZE = 4e-4              # meters
 MIRROR_Z   = True              # double along z by reflecting, so face z=0 == face z=Lz
-EXPORT_STL = True              # also write geometry.stl (needs: pip install scikit-image trimesh)
 
 # --- sphere coordinate scaling ---
 # Multiplies every sphere center + radius from the JSON (result: meters).
@@ -50,7 +49,6 @@ HERE          = Path(__file__).resolve().parent
 SPHERES_FILE  = HERE / "data.json"
 GEOMETRY_FILE = HERE / "geometry.raw"
 INPUT_FILE    = HERE / "input.inp"
-STL_FILE      = HERE / "geometry.stl"
 
 
 def load_spheres(path):
@@ -70,25 +68,6 @@ def voxelize(spheres, nx, ny, nz, vs):
         inside = (x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2 <= r ** 2
         geom[inside] = 1
     return geom
-
-
-def write_stl(geom, vs, path):
-    n_solid = int((geom == 1).sum())
-    if n_solid == 0 or n_solid == geom.size:
-        print(f"STL export skipped: no fluid-solid interface ({n_solid} solid voxels)")
-        return
-    try:
-        from skimage.measure import marching_cubes
-        import trimesh
-    except ImportError:
-        print("STL export skipped: run 'pip install scikit-image trimesh' to enable")
-        return
-    verts, faces, normals, _ = marching_cubes(
-        geom.astype(float), level=0.5, spacing=(vs, vs, vs)
-    )
-    mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals)
-    mesh.export(str(path))
-    print(f"Wrote {path.name} ({len(faces)} triangles, {path.stat().st_size} bytes)")
 
 
 def write_input_file(nx, ny, nz, vs, porosity):
@@ -141,9 +120,6 @@ def main():
 
     write_input_file(NX, NY, nz_out, VOXEL_SIZE, porosity)
     print(f"Wrote {INPUT_FILE.name}")
-
-    if EXPORT_STL:
-        write_stl(geom, VOXEL_SIZE, STL_FILE)
 
 
 if __name__ == "__main__":

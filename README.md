@@ -8,6 +8,7 @@ A minimal end-to-end example: define a few spheres in a text file, voxelize them
 |---|---|
 | `spheres.json` | Sphere data as JSON. Schema: `{"scale": s, "spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`. Every center + radius is multiplied by `scale` to get meters — set `scale = 1.0` if your data is already in meters, or `scale = NX * VOXEL_SIZE` if your data is in a unit cube `[0, 1]`. Missing `scale` defaults to `1.0`. Extra top-level keys (like `"notes"`) are ignored. |
 | `build_geometry.py` | Reads `spheres.json`, voxelizes it, writes `geometry.raw` **and** `input.inp` in one shot. All grid/solver constants live at the top of this script — single source of truth. |
+| `build_stl.py` | Optional. Reads `data.json` and writes `geometry.stl` for 3D printing: marching cubes on the exact signed distance field, in mm, clipped to the 28 x 28 x 54 mm box, not mirrored. Box size and resolution (0.2 mm) are hard-coded at the top. Needs `pyvista` + `scipy`. |
 | `fields2vtu.py` | Reads POREMAPS's output `.raw` fields (velocity, pressure, geometry, etc.) and writes a single `.vtu` for ParaView. Copied verbatim from upstream POREMAPS (MIT license, David Krach & Matthias Ruf). |
 
 Files generated at runtime (not tracked in git):
@@ -16,6 +17,7 @@ Files generated at runtime (not tracked in git):
 |---|---|
 | `geometry.raw` | `build_geometry.py` |
 | `input.inp` | `build_geometry.py` — POREMAPS input file, regenerated each run from constants in the script (also contains the computed porosity = fluid_voxels / total_voxels) |
+| `geometry.stl` | `build_stl.py` — printable part in mm (unmirrored) |
 | `permeability_spheres.log` | POREMAPS — convergence history + permeability values |
 | `velx_geometry.raw`, `vely_geometry.raw`, `velz_geometry.raw` | POREMAPS — velocity components (float64), when `write_output` flag 1 is set |
 | `press_geometry.raw` | POREMAPS — pressure (float64), when flag 2 is set |
@@ -30,6 +32,7 @@ spheres.json
      │
      ▼
 build_geometry.py  ──►  geometry.raw  +  input.inp
+build_stl.py       ──►  geometry.stl  (optional, for 3D printing)
                                                 │
                                                 ▼
                                           POREMAPS  ──►  permeability_spheres.log
@@ -57,6 +60,7 @@ build_geometry.py  ──►  geometry.raw  +  input.inp
 - **POREMAPS binary** — build from source. Upstream: [git.rwth-aachen.de/david.krach/poremaps](https://git.rwth-aachen.de/david.krach/poremaps).
 - **MPI runtime** with `mpirun` on `PATH` (OpenMPI, MPICH, or your cluster's vendor MPI).
 - **Python 3** with `numpy`.
+- Optional (for the STL): `pyvista`, `scipy`.
 - Optional (for visualization): `pyevtk` (`pip install pyevtk`) and [ParaView](https://www.paraview.org/).
 
 ## Setup
@@ -74,6 +78,7 @@ Add that line to your `~/.bashrc` / `~/.zshrc` to make it persistent.
 ```bash
 # 1. build the geometry
 python build_geometry.py
+python build_stl.py        # optional: geometry.stl for 3D printing
 
 # 2. run POREMAPS (adjust -np to your physical core count)
 mpirun -np 4 "$POREMAPS_DIR/bin/POREMAPS" input.inp
