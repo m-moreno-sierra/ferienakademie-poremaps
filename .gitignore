@@ -8,5 +8,6 @@ velz_*.raw
 press_*.raw
 voxel_neighborhood_*.raw
 domain_decomp_*.raw
+*.stl
 __pycache__/
 .DS_Store
