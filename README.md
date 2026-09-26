@@ -6,7 +6,7 @@ A minimal end-to-end example: define a few spheres in a text file, voxelize them
 
 | File | Purpose |
 |---|---|
-| `spheres.json` | Sphere data as JSON: `{"spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`, all values in meters. Extra top-level keys (like `"notes"`) are ignored. |
+| `spheres.json` | Sphere data as JSON. Schema: `{"scale": s, "spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`. Every center + radius is multiplied by `scale` to get meters — set `scale = 1.0` if your data is already in meters, or `scale = NX * VOXEL_SIZE` if your data is in a unit cube `[0, 1]`. Missing `scale` defaults to `1.0`. Extra top-level keys (like `"notes"`) are ignored. |
 | `build_geometry.py` | Reads `spheres.json`, voxelizes it, writes `geometry.raw` **and** `input.inp` in one shot. All grid/solver constants live at the top of this script — single source of truth. |
 | `fields2vtu.py` | Reads POREMAPS's output `.raw` fields (velocity, pressure, geometry, etc.) and writes a single `.vtu` for ParaView. Copied verbatim from upstream POREMAPS (MIT license, David Krach & Matthias Ruf). |
 
