@@ -10,6 +10,7 @@ A minimal end-to-end example: define a few spheres in a text file, voxelize them
 | `build_geometry.py` | Reads `spheres.txt`, voxelizes it, writes `geometry.raw` in the format POREMAPS expects (uint8, Fortran byte order). Optionally mirror-doubles along z. |
 | `input.inp` | POREMAPS input file. Grid size and voxel size must match the constants in `build_geometry.py`. |
 | `porous_strucutre.py` | Alternative geometry generator using CadQuery. Creates a solid cylinder drilled with parallel channels at target porosities, exports each as `.stl`. Independent from the sphere-voxel pipeline (see section below). |
+| `fields2vtu.py` | Reads POREMAPS's output `.raw` fields (velocity, pressure, geometry, etc.) and writes a single `.vtu` for ParaView. Copied verbatim from upstream POREMAPS (MIT license, David Krach & Matthias Ruf). |
 
 Files generated at runtime (not tracked in git):
 
@@ -52,7 +53,7 @@ python build_geometry.py
 mpirun -np 4 "$POREMAPS_DIR/bin/POREMAPS" input.inp
 
 # 3. convert output fields to VTU for ParaView (optional)
-python "$POREMAPS_DIR/fields2vtu.py" geometry.raw 30 30 100 1e-5
+python fields2vtu.py geometry.raw 30 30 100 1e-5
 ```
 
 Then open `fields_geometry.vtu` in ParaView.
