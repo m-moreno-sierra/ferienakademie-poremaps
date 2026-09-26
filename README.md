@@ -23,6 +23,35 @@ Files generated at runtime (not tracked in git):
 | `domain_decomp_geometry.raw` | POREMAPS — MPI rank ownership (uint32), when flag 4 is set |
 | `fields_geometry.vtu` | `fields2vtu.py` — combined VTU for ParaView |
 
+## How it works
+
+```
+spheres.json
+     │
+     ▼
+build_geometry.py  ──►  geometry.raw  +  input.inp
+                                                │
+                                                ▼
+                                          POREMAPS  ──►  permeability_spheres.log
+                                                    ──►  velx / vely / velz / press .raw files
+                                                                                │
+                                                                                ▼
+                                                                      fields2vtu.py  ──►  fields_geometry.vtu  (ParaView)
+```
+
+1. **Describe the geometry** in `spheres.json` — a list of sphere centers and radii (all in meters).
+2. **Run `python build_geometry.py`.** This does two things in one shot:
+   - voxelizes the spheres into `geometry.raw` (uint8 voxels, Fortran memory order — POREMAPS's format).
+   - writes `input.inp` with the matching grid size, voxel size, and the actual porosity computed as `fluid_voxels / total_voxels`.
+
+   All grid + solver knobs (`NX`, `NY`, `NZ`, `VOXEL_SIZE`, `MIRROR_Z`, `BOUNDARY_METHOD`, `MAX_ITER`, `EPS`, `WRITE_OUTPUT`, …) live at the top of `build_geometry.py`. **This is the single source of truth.** `input.inp` is regenerated every run and should not be edited by hand.
+
+3. **Run POREMAPS**: `mpirun -np <cores> "$POREMAPS_DIR/bin/POREMAPS" input.inp`. It solves the Stokes flow through your voxel geometry and writes:
+   - `permeability_spheres.log` — convergence history and the permeability values in each iteration.
+   - Optional `.raw` output fields (velocity, pressure, etc.) depending on the `WRITE_OUTPUT` flags.
+
+4. **Optionally visualize**: `python fields2vtu.py geometry.raw <NX> <NY> <NZ> <VOXEL_SIZE>` bundles POREMAPS's output `.raw` files into one `.vtu`. Open it in ParaView.
+
 ## Requirements
 
 - **POREMAPS binary** — build from source. Upstream: [git.rwth-aachen.de/david.krach/poremaps](https://git.rwth-aachen.de/david.krach/poremaps).
