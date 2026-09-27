@@ -21,26 +21,30 @@ top-level keys (e.g. "notes") are ignored.
 """
 
 import json
+import math
 import numpy as np
 from pathlib import Path
 
-# --- geometry grid ---
-NX, NY, NZ = 70, 70, 135
-VOXEL_SIZE = 4e-4              # meters
-MIRROR_Z   = True              # double along z by reflecting, so face z=0 == face z=Lz
-
-# --- cylindrical sample (axis along z, centered in the x/y domain) ---
+# --- cylindrical sample (axis along z through x = y = 0, floor at z = 0) ---
 # The packing fills the bore; the printed wall (see build_stl.py) lies outside
 # it, so every voxel outside the bore is simply solid.
-CYL_CENTER  = (NX * VOXEL_SIZE / 2, NY * VOXEL_SIZE / 2)   # meters, (14 mm, 14 mm)
-BORE_RADIUS = 11e-3            # meters, 22 mm inner diameter
+BORE_RADIUS   = 11e-3            # meters, 22 mm inner diameter
+SAMPLE_HEIGHT = 54e-3            # meters
+
+# --- geometry grid ---
+# x/y are cropped to the bore plus a solid rim of at least one voxel on each
+# side (needed so periodic x/y boundaries connect no fluid), centered on the bore.
+VOXEL_SIZE = 3e-4                # meters
+MIRROR_Z   = True                # double along z by reflecting, so face z=0 == face z=Lz
+NX = NY    = math.ceil(2 * BORE_RADIUS / VOXEL_SIZE) + 2
+NZ         = round(SAMPLE_HEIGHT / VOXEL_SIZE)
+GRID_ORIGIN = (-NX * VOXEL_SIZE / 2, -NY * VOXEL_SIZE / 2, 0.0)
 
 # --- sphere coordinate scaling ---
 # Multiplies every sphere center + radius from the JSON (result: meters).
 # If the JSON has its own "scale" field, that overrides this constant.
-# Default: NX * VOXEL_SIZE assumes JSON is in a unit cube [0, 1] fitted to the x-domain.
-# Set to 1.0 if the JSON is already in meters.
-SPHERE_COORD_SCALE = NX * VOXEL_SIZE
+# Default: JSON in mm.
+SPHERE_COORD_SCALE = 1e-3
 
 # --- POREMAPS solver settings (see README) ---
 BOUNDARY_METHOD    = 0                    # 0 = periodic all around
@@ -68,9 +72,10 @@ def load_spheres(path):
 
 def voxelize(spheres, nx, ny, nz, vs):
     i, j, k = np.meshgrid(np.arange(nx), np.arange(ny), np.arange(nz), indexing="ij")
-    x = (i + 0.5) * vs
-    y = (j + 0.5) * vs
-    z = (k + 0.5) * vs
+    x0, y0, z0 = GRID_ORIGIN
+    x = x0 + (i + 0.5) * vs
+    y = y0 + (j + 0.5) * vs
+    z = z0 + (k + 0.5) * vs
 
     geom = np.zeros((nx, ny, nz), dtype=np.uint8)
     for cx, cy, cz, r in spheres:
@@ -82,8 +87,9 @@ def voxelize(spheres, nx, ny, nz, vs):
 def bore_mask(nx, ny, vs):
     """2D mask (nx, ny): True where the voxel center lies inside the bore."""
     i, j = np.meshgrid(np.arange(nx), np.arange(ny), indexing="ij")
-    cx, cy = CYL_CENTER
-    return ((i + 0.5) * vs - cx) ** 2 + ((j + 0.5) * vs - cy) ** 2 <= BORE_RADIUS ** 2
+    x = GRID_ORIGIN[0] + (i + 0.5) * vs
+    y = GRID_ORIGIN[1] + (j + 0.5) * vs
+    return x ** 2 + y ** 2 <= BORE_RADIUS ** 2
 
 
 def write_input_file(nx, ny, nz, vs, porosity):

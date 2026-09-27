@@ -30,28 +30,27 @@ All generated files (`geometry.raw`, `input.inp`, `geometry.stl`, `*.log`, field
 python build_geometry.py                                    # geometry.raw + input.inp
 python build_stl.py                                         # optional: geometry.stl
 mpiexec -n 4 <path>/POREMAPS input.inp                      # mpirun -np 4 on Linux/macOS
-python fields2vtu.py geometry.raw 70 70 270 4e-4            # optional: fields_geometry.vtu
+python fields2vtu.py geometry.raw 76 76 360 3e-4            # optional: fields_geometry.vtu
 ```
 
 The `fields2vtu.py` arguments are the grid size and voxel size that `build_geometry.py` prints. The grid is `NX NY 2*NZ` when `MIRROR_Z` is on.
 
 ## Sample and data
 
-The sample is a cylinder with its axis along z, centered at (14, 14) mm, 54 mm tall:
+The sample is a cylinder with its axis along z, its axis at x = y = 0, floor at z = 0, 54 mm tall:
 
 - **Bore**, 22 mm diameter: holds the packing, and spheres are cut at its edge.
 - **Wall**, 22 to 29 mm diameter: solid. It only exists in the STL; in the voxel grid everything outside the bore is simply solid.
 
-Sphere file schema: `{"scale": s, "spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`. Centers and radii times `scale` give meters. Without `scale`, `NX * VOXEL_SIZE` (28 mm) is used, i.e. x/y are unit-normalized. Other keys are ignored.
+Sphere file schema: `{"scale": s, "spheres": [{"center": [cx, cy, cz], "radius": r}, ...]}`. Centers and radii times `scale` give meters. Both files are in mm (`"scale": 0.001`) with the bore axis at x = y = 0; without `scale`, `SPHERE_COORD_SCALE` (mm) is used. Other keys are ignored.
 
 - **`data.json`**: 177 beads of about 5 mm diameter, settled under gravity into the bore (soft-sphere energy minimization). Afterwards the radii were grown by 6 % so touching beads fuse through necks into one printable body. The bed was filled higher than 54 mm and cut at 54 mm, so the spheres at the top are cut on purpose. The `params` field records the generator settings.
-- **`data_old.json`**: earlier 75-sphere packing without `scale`. To use it, set `SPHERES_FILE` in `build_geometry.py`; `build_stl.py` follows automatically.
 
-Coordinates use a corner origin: the domain spans `[0, NX*vs] x [0, NY*vs] x [0, NZ*vs]`, and voxel `(i, j, k)` has its center at `((i+0.5)*vs, (j+0.5)*vs, (k+0.5)*vs)`. The `.vtu` from `fields2vtu.py` is centered on the domain instead (shifted by half the domain size).
+The voxel grid is cropped in x/y to the bore plus a solid rim of at least one voxel, centered on the bore axis: `NX = NY = ceil(22 mm / vs) + 2`, `NZ = 54 mm / vs`. Voxel `(i, j, k)` has its center at `GRID_ORIGIN + ((i+0.5)*vs, (j+0.5)*vs, (k+0.5)*vs)`, with `GRID_ORIGIN = (-NX*vs/2, -NY*vs/2, 0)`. The STL uses the same frame (in mm). The `.vtu` from `fields2vtu.py` is centered on the domain in x/y, so it matches too; in z it is centered as well, i.e. shifted down by half the (mirrored) length.
 
 ## Configuration
 
-All settings live at the top of `build_geometry.py`: grid (`NX`, `NY`, `NZ`, `VOXEL_SIZE`, `MIRROR_Z`), sample (`CYL_CENTER`, `BORE_RADIUS`), sphere file and solver (`BOUNDARY_METHOD`, `MAX_ITER`, `EPS`, `WRITE_OUTPUT`, ...). `build_stl.py` imports these and only defines its own wall radius and mesh resolution.
+All settings live at the top of `build_geometry.py`: grid (`VOXEL_SIZE`, `MIRROR_Z`; `NX`, `NY`, `NZ` follow from the sample size), sample (`BORE_RADIUS`, `SAMPLE_HEIGHT`), sphere file and solver (`BOUNDARY_METHOD`, `MAX_ITER`, `EPS`, `WRITE_OUTPUT`, ...). `build_stl.py` imports these and only defines its own wall radius and mesh resolution.
 
 ## Simulation notes
 

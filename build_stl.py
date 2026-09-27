@@ -11,13 +11,13 @@ import numpy as np
 import pyvista as pv
 from scipy import ndimage
 
-from build_geometry import HERE, SPHERES_FILE, NZ, VOXEL_SIZE, CYL_CENTER, BORE_RADIUS, load_spheres
+from build_geometry import HERE, SPHERES_FILE, SAMPLE_HEIGHT, BORE_RADIUS, load_spheres
 
 MM = 1e3                        # meters -> mm
-CX, CY = (c * MM for c in CYL_CENTER)
+CX, CY = 0.0, 0.0                # bore axis
 R_IN = BORE_RADIUS * MM         # bore radius
 R_OUT = 14.5                    # mm, outer radius of the wall (29 mm diameter)
-LZ = NZ * VOXEL_SIZE * MM       # height
+LZ = SAMPLE_HEIGHT * MM         # height
 H = 0.2                         # mm, marching-cubes grid spacing
 PAD = 2                         # grid points outside the part on each side
 STL_FILE = HERE / "geometry.stl"
