@@ -30,7 +30,7 @@ VOXEL_SIZE = 4e-4              # meters
 MIRROR_Z   = True              # double along z by reflecting, so face z=0 == face z=Lz
 
 # --- cylindrical sample (axis along z, centered in the x/y domain) ---
-# The packing fills the bore; the printed wall (r = 11 .. 14.5 mm) lies outside
+# The packing fills the bore; the printed wall (see build_stl.py) lies outside
 # it, so every voxel outside the bore is simply solid.
 CYL_CENTER  = (NX * VOXEL_SIZE / 2, NY * VOXEL_SIZE / 2)   # meters, (14 mm, 14 mm)
 BORE_RADIUS = 11e-3            # meters, 22 mm inner diameter
@@ -134,7 +134,7 @@ def main():
     print(f"Solid voxels: {total - fluid}  ({(total - fluid)/total:.1%} of grid)")
     print(f"Bore voxels:  {bore}  (d = {2 * BORE_RADIUS * 1e3:g} mm)")
     print(f"Fluid voxels: {fluid}")
-    print(f"Porosity:     {porosity:.6f}  (fluid_volume / bore_volume)")
+    print(f"Porosity:     {porosity:.6f}  (bore only)")
     print(f"Wrote {GEOMETRY_FILE.name} ({GEOMETRY_FILE.stat().st_size} bytes)")
 
     write_input_file(NX, NY, nz_out, VOXEL_SIZE, porosity)
