@@ -12,7 +12,7 @@ data.json ─► build_geometry.py ─► geometry.raw + input.inp ─► POREMA
 | File | Purpose |
 |---|---|
 | `data.json` | Sphere packing used by default (see [Sample and data](#sample-and-data)). |
-| `data_old.json` | Earlier packing, kept for reference. |
+| `data_old.json` | Earlier packing, kept for reference in its original format (unit-normalized to 28 mm, no `scale`). It does not fit the current scripts; its `notes` say how to convert it. |
 | `build_geometry.py` | Voxelizes the packing into `geometry.raw` (uint8, Fortran order) and writes the matching POREMAPS `input.inp`. Holds all grid, sample and solver settings. |
 | `build_stl.py` | Writes `geometry.stl` in mm: the packing clipped to the bore plus a solid wall. Takes the sample dimensions from `build_geometry.py`. |
 | `fields2vtu.py` | Combines the POREMAPS output fields into one `.vtu`. Verbatim copy from upstream POREMAPS (MIT, David Krach & Matthias Ruf). |
