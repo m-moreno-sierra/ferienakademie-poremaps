@@ -17,12 +17,12 @@ data.json ─► build_geometry.py ─► geometry.raw + input.inp ─► POREMA
 | `build_stl.py` | Writes `geometry.stl` in mm: the packing clipped to the bore plus a solid wall. Takes the sample dimensions from `build_geometry.py`. |
 | `fields2vtu.py` | Combines the POREMAPS output fields into one `.vtu`. Verbatim copy from upstream POREMAPS (MIT, David Krach & Matthias Ruf). |
 
-All generated files (`geometry.raw`, `input.inp`, `geometry.stl`, `*.log`, field `.raw` files, `*.vtu`) are git-ignored. Do not edit them by hand; rerun the scripts.
+All generated files (`geometry.raw`, `input.inp`, `geometry.stl`, `*.log`, field `.raw` files, `*.vtu`) are git-ignored in the project root; finished runs are copied to `results/<run>/` and committed there (see its README). Do not edit them by hand; rerun the scripts.
 
 ## Requirements
 
 - POREMAPS binary (build from source) and an MPI runtime (`mpiexec`/`mpirun`)
-- Python 3 with `numpy`; `scipy` + `pyvista` for the STL; `pyevtk` for the VTU; [ParaView](https://www.paraview.org/) to view it
+- Python 3 with `numpy`; `scipy` + `pyvista` for the STL and `view_results.py`; `pyevtk` for the VTU; [ParaView](https://www.paraview.org/) to view it
 
 ## Run
 
@@ -31,6 +31,7 @@ python build_geometry.py                                    # geometry.raw + inp
 python build_stl.py                                         # optional: geometry.stl
 mpiexec -n 4 <path>/POREMAPS input.inp                      # mpirun -np 4 on Linux/macOS
 python fields2vtu.py geometry.raw 76 76 360 3e-4            # optional: fields_geometry.vtu
+python view_results.py [results/<run>]                      # optional: quick PyVista view of a saved run
 ```
 
 The `fields2vtu.py` arguments are the grid size and voxel size that `build_geometry.py` prints. The grid is `NX NY 2*NZ` when `MIRROR_Z` is on.
