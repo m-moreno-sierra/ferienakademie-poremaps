@@ -1,6 +1,6 @@
-input.inp
-geometry.raw
-permeability_*.log
+/input.inp
+/geometry.raw
+/permeability_*.log
 fields_*.vtu
 velx_*.raw
 vely_*.raw
@@ -11,3 +11,7 @@ domain_decomp_*.raw
 *.stl
 __pycache__/
 .DS_Store
+generate_packing.py
+
+# archived runs in results/ are committed in full, including the field files
+!/results/**

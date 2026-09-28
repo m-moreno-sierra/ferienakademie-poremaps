@@ -1,38 +1,50 @@
 #!/usr/bin/env python3
 """
-Read spheres.json and write BOTH:
+Read data.json, clip the packing to a cylindrical bore (everything outside is
+solid), and write BOTH:
   - geometry.raw  (voxel grid for POREMAPS: uint8, Fortran memory order)
   - input.inp     (POREMAPS input file)
 
 Both files are regenerated every run — do not edit them by hand; edit this
 script and rerun.
 
-JSON schema (see spheres.json for an example):
+JSON schema (see data.json for an example):
 {
+  "scale": s,        # optional, defaults to SPHERE_COORD_SCALE
   "spheres": [
     {"center": [cx, cy, cz], "radius": r},
     ...
   ]
 }
-All values in meters. Any extra top-level keys (e.g. "notes") are ignored.
+Every center + radius is multiplied by scale to get meters. Any extra
+top-level keys (e.g. "notes") are ignored.
 """
 
 import json
+import math
 import numpy as np
 from pathlib import Path
 
+# --- cylindrical sample (axis along z through x = y = 0, floor at z = 0) ---
+# The packing fills the bore; the printed wall (see build_stl.py) lies outside
+# it, so every voxel outside the bore is simply solid.
+BORE_RADIUS   = 11e-3            # meters, 22 mm inner diameter
+SAMPLE_HEIGHT = 54e-3            # meters
+
 # --- geometry grid ---
-NX, NY, NZ = 70, 70, 135
-VOXEL_SIZE = 4e-5              # meters
-MIRROR_Z   = True              # double along z by reflecting, so face z=0 == face z=Lz
-EXPORT_STL = True              # also write geometry.stl (needs: pip install scikit-image trimesh)
+# x/y are cropped to the bore plus a solid rim of at least one voxel on each
+# side (needed so periodic x/y boundaries connect no fluid), centered on the bore.
+VOXEL_SIZE = 3e-4                # meters
+MIRROR_Z   = True                # double along z by reflecting, so face z=0 == face z=Lz
+NX = NY    = math.ceil(2 * BORE_RADIUS / VOXEL_SIZE) + 2
+NZ         = round(SAMPLE_HEIGHT / VOXEL_SIZE)
+GRID_ORIGIN = (-NX * VOXEL_SIZE / 2, -NY * VOXEL_SIZE / 2, 0.0)
 
 # --- sphere coordinate scaling ---
 # Multiplies every sphere center + radius from the JSON (result: meters).
 # If the JSON has its own "scale" field, that overrides this constant.
-# Default: NX * VOXEL_SIZE assumes JSON is in a unit cube [0, 1] fitted to the x-domain.
-# Set to 1.0 if the JSON is already in meters.
-SPHERE_COORD_SCALE = NX * VOXEL_SIZE
+# Default: JSON in mm.
+SPHERE_COORD_SCALE = 1e-3
 
 # --- POREMAPS solver settings (see README) ---
 BOUNDARY_METHOD    = 0                    # 0 = periodic all around
@@ -50,7 +62,6 @@ HERE          = Path(__file__).resolve().parent
 SPHERES_FILE  = HERE / "data.json"
 GEOMETRY_FILE = HERE / "geometry.raw"
 INPUT_FILE    = HERE / "input.inp"
-STL_FILE      = HERE / "geometry.stl"
 
 
 def load_spheres(path):
@@ -61,9 +72,10 @@ def load_spheres(path):
 
 def voxelize(spheres, nx, ny, nz, vs):
     i, j, k = np.meshgrid(np.arange(nx), np.arange(ny), np.arange(nz), indexing="ij")
-    x = (i + 0.5) * vs
-    y = (j + 0.5) * vs
-    z = (k + 0.5) * vs
+    x0, y0, z0 = GRID_ORIGIN
+    x = x0 + (i + 0.5) * vs
+    y = y0 + (j + 0.5) * vs
+    z = z0 + (k + 0.5) * vs
 
     geom = np.zeros((nx, ny, nz), dtype=np.uint8)
     for cx, cy, cz, r in spheres:
@@ -72,23 +84,12 @@ def voxelize(spheres, nx, ny, nz, vs):
     return geom
 
 
-def write_stl(geom, vs, path):
-    n_solid = int((geom == 1).sum())
-    if n_solid == 0 or n_solid == geom.size:
-        print(f"STL export skipped: no fluid-solid interface ({n_solid} solid voxels)")
-        return
-    try:
-        from skimage.measure import marching_cubes
-        import trimesh
-    except ImportError:
-        print("STL export skipped: run 'pip install scikit-image trimesh' to enable")
-        return
-    verts, faces, normals, _ = marching_cubes(
-        geom.astype(float), level=0.5, spacing=(vs, vs, vs)
-    )
-    mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals)
-    mesh.export(str(path))
-    print(f"Wrote {path.name} ({len(faces)} triangles, {path.stat().st_size} bytes)")
+def bore_mask(nx, ny, vs):
+    """2D mask (nx, ny): True where the voxel center lies inside the bore."""
+    i, j = np.meshgrid(np.arange(nx), np.arange(ny), indexing="ij")
+    x = GRID_ORIGIN[0] + (i + 0.5) * vs
+    y = GRID_ORIGIN[1] + (j + 0.5) * vs
+    return x ** 2 + y ** 2 <= BORE_RADIUS ** 2
 
 
 def write_input_file(nx, ny, nz, vs, porosity):
@@ -118,6 +119,8 @@ def main():
     print(f"Loaded {len(spheres)} spheres from {SPHERES_FILE.name}")
 
     geom = voxelize(spheres, NX, NY, NZ, VOXEL_SIZE)
+    mask = bore_mask(NX, NY, VOXEL_SIZE)
+    geom[~mask] = 1                 # everything outside the bore is solid
 
     if MIRROR_Z:
         geom = np.concatenate([geom, geom[:, :, ::-1]], axis=2)
@@ -129,21 +132,19 @@ def main():
     GEOMETRY_FILE.write_bytes(geom.tobytes(order="F"))
 
     total    = NX * NY * nz_out
-    solid    = int((geom == 1).sum())
-    fluid    = total - solid
-    porosity = fluid / total       # fluid_volume / total_volume
+    bore     = int(mask.sum()) * nz_out
+    fluid    = int((geom == 0).sum())   # fluid only exists inside the bore
+    porosity = fluid / bore             # fluid_volume / bore_volume
 
     print(f"Grid: {NX} x {NY} x {nz_out} = {total} voxels, vs = {VOXEL_SIZE} m")
-    print(f"Solid voxels: {solid}  ({solid/total:.1%})")
+    print(f"Solid voxels: {total - fluid}  ({(total - fluid)/total:.1%} of grid)")
+    print(f"Bore voxels:  {bore}  (d = {2 * BORE_RADIUS * 1e3:g} mm)")
     print(f"Fluid voxels: {fluid}")
-    print(f"Porosity:     {porosity:.6f}  (fluid_volume / total_volume)")
+    print(f"Porosity:     {porosity:.6f}  (bore only)")
     print(f"Wrote {GEOMETRY_FILE.name} ({GEOMETRY_FILE.stat().st_size} bytes)")
 
     write_input_file(NX, NY, nz_out, VOXEL_SIZE, porosity)
     print(f"Wrote {INPUT_FILE.name}")
-
-    if EXPORT_STL:
-        write_stl(geom, VOXEL_SIZE, STL_FILE)
 
 
 if __name__ == "__main__":
